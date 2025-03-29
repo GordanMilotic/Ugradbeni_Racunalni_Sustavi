@@ -94,7 +94,7 @@ void loop(){
           current_brightness = ledR_min_brightness;
           analogWrite(ledR, current_brightness);
         }
-        Serial.println("current :");
+        Serial.println("Current brightness:");
         Serial.println(current_brightness);
         break;
       case volume_down:
@@ -106,7 +106,7 @@ void loop(){
           }
           analogWrite(ledR, current_brightness);
         }
-        Serial.println("current :");
+        Serial.println("Current brightness:");
         Serial.println(current_brightness);
         break;
     }
