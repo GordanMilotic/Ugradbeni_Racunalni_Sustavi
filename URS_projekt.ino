@@ -13,10 +13,18 @@ const int button_9 = 65545;
 const int button_subtitle = 65611;
 const int button_text = 65596;
 
+const int volume_up = 65552;
+const int volume_down = 65553;
+
 const int ledB = 4;
 const int ledR = 5;
 
-int recv = 2;
+int ledR_min_brightness = 0;
+int ledR_max_brightness = 255;
+int brightness_increment = 1;
+int current_brightness = 0;
+
+const int recv = 2;
 IRrecv irrecv(recv);
 bool ledState = false; 
 decode_results results;
@@ -35,13 +43,12 @@ void loop(){
     //Serial.println(results.value); //za ocitanje kodova sa daljinskog
     switch (results.value){
       case button_1:
-        Serial.println("Button 1 pressed");
+        //Serial.println("Button 1 pressed");
         if(results.value == button_1){
           ledState=!ledState;
           digitalWrite(ledB, ledState);
           Serial.println(ledState ? "On" : "Off");
-          //delay(300);
-          //digitalWrite(ledR, !ledState);
+          delay(300);
         }
         break;
       case button_2:
@@ -76,6 +83,31 @@ void loop(){
         break;
       case button_text:
         Serial.println("Button text pressed");
+        break;
+      case volume_up:
+        //Serial.println("Button volume up pressed");
+        if (results.value == volume_up) {
+          ledR_min_brightness += brightness_increment;
+          if (ledR_min_brightness > ledR_max_brightness) {
+            ledR_min_brightness = ledR_max_brightness;  
+          }
+          current_brightness = ledR_min_brightness;
+          analogWrite(ledR, current_brightness);
+        }
+        Serial.println("current :");
+        Serial.println(current_brightness);
+        break;
+      case volume_down:
+      //Serial.println("Button volume down pressed");
+        if (results.value == volume_down) {
+          current_brightness -= brightness_increment;
+          if (current_brightness < 0) {
+              current_brightness = 0;  
+          }
+          analogWrite(ledR, current_brightness);
+        }
+        Serial.println("current :");
+        Serial.println(current_brightness);
         break;
     }
     irrecv.resume();
