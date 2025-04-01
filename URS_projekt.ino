@@ -1,25 +1,35 @@
 #include <IRremote.h>
 
-const int button_0 = 65536;
-const int button_1 = 65537;
-const int button_2 = 65538;
-const int button_3 = 65539;
-const int button_4 = 65540;
-const int button_5 = 65541;
-const int button_6 = 65542;
-const int button_7 = 65543;
-const int button_8 = 65544;
-const int button_9 = 65545;
-const int button_subtitle = 65611;
-const int button_text = 65596;
+enum philips_buttons {
+  button_0 = 65536, 
+  button_1, 
+  button_2, 
+  button_3, 
+  button_4, 
+  button_5, 
+  button_6, 
+  button_7, 
+  button_8, 
+  button_9, 
+  red_button = 65645, 
+  green_button, 
+  yellow_button,
+  blue_button,
+  volume_up = 65552,
+  volume_down,
+  stop_button = 65584,
+  pause_button,
+  record_button = 65591,
+  fast_rewind = 65579,
+  play_button,
+  fast_forward = 65576
+};
 
-const int volume_up = 65552;
-const int volume_down = 65553;
 
 const int ledB = 4;
 const int ledR = 5;
 
-int ledR_min_brightness = 0;
+//int ledR_min_brightness = 0;
 int ledR_max_brightness = 255;
 int brightness_increment = 1;
 int current_brightness = 0;
@@ -40,7 +50,14 @@ void setup(){
 void loop(){
   if (irrecv.decode(&results)){
     //Serial.println("Recieved: ");  
-    //Serial.println(results.value); //za ocitanje kodova sa daljinskog
+    Serial.println(results.value); //za ocitanje kodova sa daljinskog
+    
+    if (results.value == 0xFFFFFFFFFF) {  
+        Serial.println("Ponovljen signal");
+        irrecv.resume();
+        return;
+    }
+
     switch (results.value){
       case button_1:
         //Serial.println("Button 1 pressed");
@@ -51,65 +68,66 @@ void loop(){
           delay(300);
         }
         break;
+
       case button_2:
         Serial.println("Button 2 pressed");
         break;
+
       case button_3:
         Serial.println("Button 3 pressed");
         break;
+
       case button_4:
         Serial.println("Button 4 pressed");
         break;
+
       case button_5:
         Serial.println("Button 5 pressed");
         break;
+
       case button_6:
         Serial.println("Button 6 pressed");
         break;
+
       case button_7:
         Serial.println("Button 7 pressed");
         break;
+        
       case button_8:
         Serial.println("Button 8 pressed");
         break;
+
       case button_9:
         Serial.println("Button 9 pressed");
         break;
+
       case button_0:
         Serial.println("Button 0 pressed");
         break;
-      case button_subtitle:
-        Serial.println("Button subtitle pressed");
-        break;
-      case button_text:
-        Serial.println("Button text pressed");
-        break;
+
       case volume_up:
         //Serial.println("Button volume up pressed");
-        if (results.value == volume_up) {
-          ledR_min_brightness += brightness_increment;
-          if (ledR_min_brightness > ledR_max_brightness) {
-            ledR_min_brightness = ledR_max_brightness;  
-          }
-          current_brightness = ledR_min_brightness;
-          analogWrite(ledR, current_brightness);
-        }
-        Serial.println("Current brightness:");
+        current_brightness = min(ledR_max_brightness, current_brightness + brightness_increment);
+        analogWrite(ledR, current_brightness);
+        Serial.print("Current brightness: ");
         Serial.println(current_brightness);
         break;
+
       case volume_down:
-      //Serial.println("Button volume down pressed");
-        if (results.value == volume_down) {
-          current_brightness -= brightness_increment;
-          if (current_brightness < 0) {
-              current_brightness = 0;  
-          }
-          analogWrite(ledR, current_brightness);
-        }
-        Serial.println("Current brightness:");
+        //Serial.println("Button volume down pressed");
+        current_brightness = max(0, current_brightness - brightness_increment);
+        analogWrite(ledR, current_brightness);
+        Serial.print("Current brightness: ");
         Serial.println(current_brightness);
         break;
+      /*case motor_speed_up:
+      //uln2003 
+        break;
+      case motor_speed_down:
+      //uln2003
+        break;*/
     }
     irrecv.resume();
+    delay(300);
   }
 }
