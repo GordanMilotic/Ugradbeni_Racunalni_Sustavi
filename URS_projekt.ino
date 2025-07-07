@@ -1,5 +1,8 @@
 #include <IRremote.h>
+#include <Wire.h>
+#include <Adafruit_PN532.h>
 
+// moze se mijenjati (u mom slucaju philips daljinski)
 enum philips_buttons {
   button_0 = 65536, 
   button_1, 
@@ -25,90 +28,69 @@ enum philips_buttons {
   fast_forward = 65576
 };
 
+int SDA_PIN = A4;
+int SCL_PIN = A5;
+Adafruit_PN532 nfc(SDA_PIN, SCL_PIN);
 
-const int ledB = 4;
-const int ledR = 5;
+const int ledGreen = 4;
+const int ledRed = 5;
+const int IRdiode = 3;
 
-//int ledR_min_brightness = 0;
-int ledR_max_brightness = 255;
-int brightness_increment = 1;
+// led varijable
+int ledRed_max_brightness = 255;
+int brightness_increment = 10; //moze se mijenjati
 int current_brightness = 0;
-
-const int recv = 2;
-IRrecv irrecv(recv);
 bool ledState = false; 
+
+// nfc varijable
+bool nfcEnabled = false;
+unsigned long lastNfcReadTime = 0;
+const unsigned long nfcReadInterval = 500; // 500ms između pokušaja čitanja
+unsigned long lastNfcTagTime = 0;
+bool nfcTagRecentlyRead = false;
+unsigned long nfcStartTime = 0;
+const unsigned long maxNfcDuration = 10000; // 10 sekundi timeout
+
+IRrecv irrecv(IRdiode);
 decode_results results;
 
-void setup(){
+void setup() {
   Serial.begin(9600);
   irrecv.enableIRIn();
   irrecv.blink13(true);
-  pinMode(ledB, OUTPUT);
-  pinMode(ledR, OUTPUT);
+  pinMode(ledGreen, OUTPUT);
+  pinMode(ledRed, OUTPUT);
+  nfc.begin();
+  uint32_t versiondata = nfc.getFirmwareVersion();
+  if (!versiondata) {
+    Serial.println("PN532 nije pronađen");
+    while (1);
+  }
+  nfc.SAMConfig();
+  Serial.println("PN532 spreman."); 
 }
 
-void loop(){
-  if (irrecv.decode(&results)){
-    //Serial.println("Recieved: ");  
-    Serial.println(results.value); //za ocitanje kodova sa daljinskog
-    
-    if (results.value == 0xFFFFFFFFFF) {  
-        Serial.println("Ponovljen signal");
-        irrecv.resume();
-        return;
+void loop() {
+  if (irrecv.decode(&results)) {
+    if (results.value == 0xFFFFFFFFFF) {
+      Serial.println("Ponovljen signal");
+      irrecv.resume();
+      return;
     }
-
-    switch (results.value){
-      case button_1:
-        //Serial.println("Button 1 pressed");
-        if(results.value == button_1){
-          ledState=!ledState;
-          digitalWrite(ledB, ledState);
-          Serial.println(ledState ? "On" : "Off");
-          delay(300);
-        }
-        break;
-
-      case button_2:
-        Serial.println("Button 2 pressed");
-        break;
-
-      case button_3:
-        Serial.println("Button 3 pressed");
-        break;
-
-      case button_4:
-        Serial.println("Button 4 pressed");
-        break;
-
-      case button_5:
-        Serial.println("Button 5 pressed");
-        break;
-
-      case button_6:
-        Serial.println("Button 6 pressed");
-        break;
-
-      case button_7:
-        Serial.println("Button 7 pressed");
-        break;
-        
-      case button_8:
-        Serial.println("Button 8 pressed");
-        break;
-
-      case button_9:
-        Serial.println("Button 9 pressed");
-        break;
-
-      case button_0:
-        Serial.println("Button 0 pressed");
-        break;
+    switch (results.value) {
+    //ovo je testni case
+    /*case button_1:
+        Serial.println("Button 1 pressed");
+        ledState = !ledState;
+        digitalWrite(ledGreen, ledState);
+        Serial.println(ledState ? "On" : "Off");
+        delay(300);
+        break;*/
 
       case volume_up:
         //Serial.println("Button volume up pressed");
-        current_brightness = min(ledR_max_brightness, current_brightness + brightness_increment);
-        analogWrite(ledR, current_brightness);
+        current_brightness = min(ledRed_max_brightness, current_brightness + brightness_increment);
+        analogWrite(ledRed, current_brightness);
         Serial.print("Current brightness: ");
         Serial.println(current_brightness);
         break;
@@ -116,18 +98,69 @@ void loop(){
       case volume_down:
         //Serial.println("Button volume down pressed");
         current_brightness = max(0, current_brightness - brightness_increment);
-        analogWrite(ledR, current_brightness);
+        analogWrite(ledRed, current_brightness);
         Serial.print("Current brightness: ");
         Serial.println(current_brightness);
         break;
-      /*case motor_speed_up:
-      //uln2003 
+
+      case green_button:
+        Serial.println("Green button pressed - NFC ENABLED");
+        digitalWrite(ledGreen, HIGH);
+        digitalWrite(ledRed, LOW);
+        lastNfcReadTime = 0;
+        nfcStartTime = millis();
+        nfcEnabled = true;
         break;
-      case motor_speed_down:
-      //uln2003
-        break;*/
+
+      case red_button:
+        Serial.println("Red button pressed - NFC DISABLED");
+        digitalWrite(ledRed, HIGH);
+        digitalWrite(ledGreen, LOW);
+        nfcEnabled = false;
+        break;
+
+      case stop_button:
+        Serial.println("Stop button pressed - RESETTING SYSTEM");
+        digitalWrite(ledGreen, LOW);
+        digitalWrite(ledRed, LOW);
+        ledState = false;
+        current_brightness = 0;
+        analogWrite(ledRed, current_brightness);
+        nfcEnabled = false;
+        break;
     }
     irrecv.resume();
-    delay(300);
+    delay(300); 
+  }
+  // automatsko gasenje nfc nakon  neaktivnosti
+  if (nfcEnabled && (millis() - nfcStartTime > maxNfcDuration)) {
+    Serial.println("NFC timeout - disabling");
+    nfcEnabled = false;
+    digitalWrite(ledRed, HIGH);
+    digitalWrite(ledGreen, LOW);
+  }
+
+  if (nfcEnabled && (millis() - lastNfcReadTime > nfcReadInterval)) {
+    lastNfcReadTime = millis();
+    if (nfcTagRecentlyRead && (millis() - lastNfcTagTime < 1000)) {
+      return;
+    }
+    uint8_t uid[7];
+    uint8_t uidLength;
+
+    if (nfc.inListPassiveTarget()) {
+      if (nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength)) {
+        Serial.print("NFC Tag detected. UID: ");
+        for (uint8_t i = 0; i < uidLength; i++) {
+          Serial.print(uid[i], HEX);
+          Serial.print(" ");
+        }
+        Serial.println();
+        nfcTagRecentlyRead = true;
+        lastNfcTagTime = millis();
+      }
+    } else {
+      nfcTagRecentlyRead = false;
+    }
   }
 }
